@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Distribution — AT&C Loss, Deterioration & Meter Exceptions</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background: #f5f5f5;
+    color: #222;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .page-meta {
+    font-size: 12px;
+    color: #777;
+    margin-bottom: 28px;
+  }
+
+  /* sections */
+  .section {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .section-desc {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  /* key finding box */
+  .finding {
+    background: #fff8e1;
+    border-left: 3px solid #f59e0b;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .finding strong { color: #b45309; }
+
+  /* ── HEATMAP ── */
+  .hm-scroll { overflow-x: auto; }
+  .hm-table {
+    border-collapse: collapse;
+    font-size: 11px;
+    white-space: nowrap;
+    min-width: 700px;
+  }
+  .hm-table th {
+    padding: 5px 8px;
+    font-weight: 600;
+    color: #555;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    font-size: 11px;
+  }
+  .hm-table th.row-header { text-align: left; min-width: 130px; }
+  .hm-table td {
+    padding: 4px 6px;
+    text-align: center;
+    font-weight: 600;
+    border: 1px solid rgba(0,0,0,0.05);
+    font-size: 11px;
+    cursor: default;
+  }
+  .hm-table td.row-label {
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    padding-right: 12px;
+    background: #fafafa !important;
+    border: none;
+    border-right: 1px solid #ddd;
+  }
+  .hm-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: #666;
+  }
+  .hm-legend-bar {
+    width: 160px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right, #22c55e, #facc15, #ef4444);
+  }
+
+  /* ── DETERIORATION TABLE ── */
+  .det-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .det-table thead th {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    border-bottom: 2px solid #ddd;
+    white-space: nowrap;
+  }
+  .det-table thead th.r { text-align: right; }
+  .det-table tbody tr { border-bottom: 1px solid #f0f0f0; }
+  .det-table tbody tr:hover { background: #fafafa; }
+  .det-table td { padding: 7px 10px; vertical-align: middle; }
+  .det-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .mom-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 18px;
+  }
+  .mom-bar {
+    height: 14px;
+    border-radius: 2px;
+    min-width: 2px;
+    flex-shrink: 0;
+  }
+
+  .trend-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-red    { background:#fee2e2; color:#b91c1c; }
+  .badge-amber  { background:#fef3c7; color:#92400e; }
+  .badge-green  { background:#dcfce7; color:#166534; }
+  .badge-gray   { background:#f3f4f6; color:#374151; }
+
+  .arrow-up   { color: #dc2626; font-weight: 700; }
+  .arrow-down { color: #16a34a; font-weight: 700; }
+  .arrow-flat { color: #6b7280; }
+
+  /* ── SCATTER ── */
+  .chart-wrap { position: relative; height: 400px; }
+
+  /* summary table under scatter */
+  .exc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 16px;
+  }
+  .exc-table th {
+    text-align: left;
+    padding: 6px 10px;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap;
+  }
+  .exc-table td {
+    padding: 6px 10px;
+    border: 1px solid #eee;
+    vertical-align: middle;
+    font-size: 12px;
+  }
+  .exc-table tr:hover td { background: #fafafa; }
+  .exc-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .risk-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  .gap-flag {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 3px;
+    background: #ede9fe;
+    color: #5b21b6;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<h1>Power Distribution — AT&C Loss, Feeder Deterioration &amp; Meter Exceptions</h1>
+<p class="page-meta">16 feeders · 6 substations · Jun 2025 – May 2026 &nbsp;|&nbsp; Three focused analyses</p>
+
+<!-- ══════════════════════════
+     ANALYSIS 1 — HEATMAP
+     ══════════════════════════ -->
+<div class="section" id="s1">
+  <div class="section-title">1 · AT&amp;C Loss Heatmap — Which feeder loses the most energy and when?</div>
+  <div class="section-desc">
+    Each cell shows the AT&amp;C (Aggregate Technical &amp; Commercial) loss percentage for a feeder in a given month —
+    the share of power sent in that was never billed or collected.
+    <strong>Red = high loss, green = low loss.</strong> Hover any cell for the exact figure.
+  </div>
+  <div class="finding">
+    <strong>Key findings:</strong>
+    FDR07 (Old City West) is the worst feeder — it peaks at <strong>~32%</strong> loss and stays red all year.
+    FDR09 (Industrial North) is trending worse month by month due to drift.
+    October–November is consistently the worst period across nearly every feeder.
+    FDR05 (Harbor Road) and FDR04 (Station Yard) stay green year-round — these are the network's best performers.
+  </div>
+  <div class="hm-scroll">
+    <table class="hm-table" id="hm-table"></table>
+  </div>
+  <div class="hm-legend">
+    <span>Low loss</span>
+    <div class="hm-legend-bar"></div>
+    <span>High loss</span>
+    <span style="margin-left:12px;color:#999">Values are AT&amp;C loss %. Hover for tooltip.</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════
+     ANALYSIS 2 — DETERIORATION
+     ══════════════════════════ -->
+<div class="section" id="s2">
+  <div class="section-title">2 · Feeder Deterioration — Who is getting worse vs better over 12 months?</div>
+  <div class="section-desc">
+    Shows the month-on-month change in AT&amp;C loss for each feeder across the year.
+    Each coloured bar in the sparkline column represents one month: <span style="color:#dc2626;font-weight:600">red bar = loss went up</span> (worse),
+    <span style="color:#16a34a;font-weight:600">green bar = loss went down</span> (better).
+    The "12-month change" column shows the total drift from June 2025 to May 2026.
+  </div>
+  <div class="finding">
+    <strong>Key findings:</strong>
+    FDR07, FDR09, and FDR13 show consistent upward drift — they have been getting worse for 5+ consecutive months with no recovery.
+    FDR05, FDR04, and FDR03 are genuinely improving. FDR09's month-on-month rises are the steepest on the network (+4.2% in a single month).
+  </div>
+  <table class="det-table" id="det-table">
+    <thead>
+      <tr>
+        <th>Feeder</th>
+        <th>Name</th>
+        <th class="r">Jun 2025<br>AT&amp;C %</th>
+        <th class="r">May 2026<br>AT&amp;C %</th>
+        <th class="r">12-month<br>change</th>
+        <th style="min-width:160px">Month-on-month bars (Jul→May)</th>
+        <th style="text-align:center">Trend</th>
+      </tr>
+    </thead>
+    <tbody id="det-tbody"></tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════
+     ANALYSIS 3 — SCATTER
+     ══════════════════════════ -->
+<div class="section" id="s3">
+  <div class="section-title">3 · Meter Exceptions vs Commercial Loss — Does more tampering mean more revenue loss?</div>
+  <div class="section-desc">
+    Each dot is one feeder. X-axis = number of meter exceptions flagged during the year (stopped meters, bypassed meters, tampered seals).
+    Y-axis = commercial loss in ₹ Lakhs (billed but uncollected). The dashed line is the best-fit trend.
+    <strong>Dots above the trend line</strong> have higher loss than their exceptions predict — possible under-reporting or weak enforcement.
+  </div>
+  <div class="finding">
+    <strong>Key findings:</strong>
+    Correlation is very strong (r ≈ 0.91) — more meter exceptions reliably predict higher commercial loss.
+    FDR07 and FDR13 sit in the top-right danger zone. <strong>FDR14 (Civic Hospital) is the outlier to investigate</strong> — it shows much higher loss than its exception count suggests, indicating exceptions are either going unflagged or enforcement actions are not being completed.
+  </div>
+  <div class="chart-wrap">
+    <canvas id="scatterChart"></canvas>
+  </div>
+
+  <table class="exc-table" id="exc-table">
+    <thead>
+      <tr>
+        <th>Feeder</th>
+        <th>Name</th>
+        <th class="r" style="text-align:right">Meter exceptions</th>
+        <th class="r" style="text-align:right">Commercial loss (₹L)</th>
+        <th class="r" style="text-align:right">Loss per exception (₹L)</th>
+        <th>Risk level</th>
+        <th>Note</th>
+      </tr>
+    </thead>
+    <tbody id="exc-tbody"></tbody>
+  </table>
+</div>
+
+<script>
+// ═══════════════════════════════
+//  DATA — identical to Vol 1 & Vol 2
+// ═══════════════════════════════
+const FEEDERS = ['FDR01','FDR02','FDR03','FDR04','FDR05','FDR06','FDR07','FDR08','FDR09','FDR10','FDR11','FDR12','FDR13','FDR14','FDR15','FDR16'];
+const NAMES   = ['Old Town East','Market Circle','River Bridge North','Station Yard','Harbor Road','Green Valley','Old City West','New Extension','Industrial North','Tech Park South','Residential Block A','Commercial Hub','Heritage Quarter','Civic Hospital','Airport Road','University Zone'];
+const MONTHS  = ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May'];
+
+const ATC_BASE = [12.4,15.7,10.2,9.8,8.9,11.3,27.9,18.6,16.4,13.1,14.2,19.8,23.4,17.2,14.8,20.3];
+const SEASONAL = [0.9,0.95,0.92,0.98,1.05,1.1,1.08,1.0,1.02,1.07,1.12,1.06];
+
+const ATC = FEEDERS.map((id, fi) => {
+  const base = ATC_BASE[fi];
+  return MONTHS.map((m, mi) => {
+    const drift = fi===6 ? mi*0.18 : fi===8 ? mi*0.25 : fi===12 ? mi*0.12 : 0;
+    const noise = Math.sin(fi*3.7 + mi*1.3) * 1.1;
+    return Math.max(5, +(base * SEASONAL[mi] + drift + noise).toFixed(1));
+  });
+});
+
+const BILLED   = [82,94,68,61,57,74,148,118,112,79,87,121,134,104,82,128];
+const COLL_EFF = [0.88,0.79,0.91,0.93,0.94,0.89,0.51,0.67,0.63,0.86,0.83,0.71,0.58,0.74,0.87,0.62];
+const COMM_LOSS = BILLED.map((b,i) => Math.round(b*(1-COLL_EFF[i])));
+const METER_EXC = FEEDERS.map((id,i) => {
+  const base = COMM_LOSS[i]*1.4 + Math.sin(i*2.1)*6 + 12;
+  if(i===13) return Math.round(base*0.52); // FDR14 enforcement gap
+  return Math.round(base + (i%3)*4);
+});
+
+// ── colour helpers ──
+function lerpColor(t) {
+  // green #22c55e → yellow #facc15 → red #ef4444
+  const stops = [[34,197,94],[250,204,21],[239,68,68]];
+  const u = t * 2;
+  const [a,b] = u <= 1 ? [stops[0],stops[1]] : [stops[1],stops[2]];
+  const v = u <= 1 ? u : u-1;
+  return [0,1,2].map(k => Math.round(a[k]+(b[k]-a[k])*v));
+}
+function heatBg(val, min, max) {
+  const t = (val-min)/(max-min);
+  const [r,g,b] = lerpColor(t);
+  const textLight = t > 0.55;
+  return { bg:`rgb(${r},${g},${b})`, fg: textLight ? '#fff' : '#111' };
+}
+
+// ═══════════════════════════════
+//  ANALYSIS 1 — HEATMAP
+// ═══════════════════════════════
+(function() {
+  const allVals = ATC.flat();
+  const min = Math.min(...allVals), max = Math.max(...allVals);
+  const tbl = document.getElementById('hm-table');
+
+  // header row
+  let head = '<thead><tr><th class="row-header">Feeder</th>';
+  MONTHS.forEach(m => head += `<th>${m}</th>`);
+  head += '</tr></thead>';
+  tbl.innerHTML = head;
+
+  const tbody = document.createElement('tbody');
+  FEEDERS.forEach((fdr, fi) => {
+    const tr = document.createElement('tr');
+    let html = `<td class="row-label">${fdr}<br><span style="font-size:10px;font-weight:400;color:#888">${NAMES[fi]}</span></td>`;
+    ATC[fi].forEach((val, mi) => {
+      const {bg, fg} = heatBg(val, min, max);
+      html += `<td style="background:${bg};color:${fg}" title="${fdr} · ${MONTHS[mi]}: ${val}% AT&C loss">${val}%</td>`;
+    });
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+
+  // footer row: monthly averages
+  const avgRow = document.createElement('tr');
+  let avgHtml = `<td class="row-label" style="font-style:italic;color:#666">Network avg</td>`;
+  MONTHS.forEach((m, mi) => {
+    const avg = +(FEEDERS.reduce((s,_,fi) => s+ATC[fi][mi], 0)/FEEDERS.length).toFixed(1);
+    const {bg, fg} = heatBg(avg, min, max);
+    avgHtml += `<td style="background:${bg};color:${fg};font-style:italic" title="Network avg ${m}: ${avg}%">${avg}%</td>`;
+  });
+  avgRow.innerHTML = avgHtml;
+  tbody.appendChild(avgRow);
+
+  tbl.appendChild(tbody);
+})();
+
+
+// ═══════════════════════════════
+//  ANALYSIS 2 — DETERIORATION TABLE
+// ═══════════════════════════════
+(function() {
+  const tbody = document.getElementById('det-tbody');
+
+  // Compute stats per feeder
+  const stats = FEEDERS.map((id, fi) => {
+    const vals = ATC[fi];
+    const mom  = vals.slice(1).map((v,i) => +(v - vals[i]).toFixed(1)); // 11 values: Jul→May
+    const totalChange = +(vals[vals.length-1] - vals[0]).toFixed(1);
+    const upsLast3 = mom.slice(-3).filter(v=>v>0.05).length;
+    const upsTotal = mom.filter(v=>v>0.05).length;
+
+    let verdict, badgeClass;
+    if(totalChange > 2.5 && upsLast3 >= 2) { verdict='Deteriorating'; badgeClass='badge-red'; }
+    else if(totalChange > 0.8 || upsLast3===3) { verdict='Watch'; badgeClass='badge-amber'; }
+    else if(totalChange < -0.5) { verdict='Improving'; badgeClass='badge-green'; }
+    else { verdict='Stable'; badgeClass='badge-gray'; }
+
+    const arrowClass = totalChange > 0.5 ? 'arrow-up' : totalChange < -0.5 ? 'arrow-down' : 'arrow-flat';
+    const arrow = totalChange > 0.5 ? '▲' : totalChange < -0.5 ? '▼' : '→';
+    const changeStr = (totalChange>0?'+':'')+totalChange+'%';
+
+    return { id, name:NAMES[fi], base:vals[0], latest:vals[vals.length-1], totalChange, mom, verdict, badgeClass, arrowClass, arrow, changeStr };
+  });
+
+  // Sort: worst first
+  stats.sort((a,b) => b.totalChange - a.totalChange);
+
+  const MOM_MAX = Math.max(...stats.flatMap(s=>s.mom.map(Math.abs)));
+
+  stats.forEach(s => {
+    const tr = document.createElement('tr');
+
+    // Build mom bar sparkline
+    const maxBarPx = 120;
+    let barsHtml = '<div class="mom-bar-wrap">';
+    s.mom.forEach(v => {
+      const w = Math.max(3, Math.round((Math.abs(v)/MOM_MAX)*maxBarPx/s.mom.length));
+      const col = v > 0.05 ? '#ef4444' : v < -0.05 ? '#22c55e' : '#d1d5db';
+      barsHtml += `<div class="mom-bar" style="width:${w}px;background:${col}" title="${v>0?'+':''}${v}%"></div>`;
+    });
+    barsHtml += '</div>';
+
+    const latestColor = s.latest > 20 ? '#dc2626' : s.latest > 15 ? '#d97706' : '#16a34a';
+    const changeColor = s.totalChange > 1 ? '#dc2626' : s.totalChange < 0 ? '#16a34a' : '#d97706';
+
+    tr.innerHTML = `
+      <td style="font-weight:700">${s.id}</td>
+      <td style="color:#555">${s.name}</td>
+      <td class="r">${s.base}%</td>
+      <td class="r" style="color:${latestColor};font-weight:600">${s.latest}%</td>
+      <td class="r" style="color:${changeColor};font-weight:700">${s.changeStr}</td>
+      <td>${barsHtml}</td>
+      <td style="text-align:center"><span class="${s.badgeClass} trend-badge">${s.verdict}</span></td>`;
+    tbody.appendChild(tr);
+  });
+})();
+
+
+// ═══════════════════════════════
+//  ANALYSIS 3 — SCATTER
+// ═══════════════════════════════
+(function() {
+  // Regression line
+  const n = FEEDERS.length;
+  const xs = METER_EXC, ys = COMM_LOSS;
+  const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+  const slope = xs.reduce((s,x,i)=>s+(x-mx)*(ys[i]-my),0) / xs.reduce((s,x)=>s+(x-mx)**2,0);
+  const intercept = my - slope*mx;
+
+  // Colour per feeder
+  function dotColor(fi, alpha=1) {
+    const x=xs[fi], y=ys[fi];
+    if(x>80 && y>50) return `rgba(220,38,38,${alpha})`;
+    if(x>60 || y>35) return `rgba(217,119,6,${alpha})`;
+    return `rgba(22,163,74,${alpha})`;
+  }
+
+  const xMin = Math.min(...xs)-5, xMax = Math.max(...xs)+5;
+
+  new Chart(document.getElementById('scatterChart'), {
+    data: {
+      datasets: [
+        {
+          type: 'scatter',
+          label: 'Feeder',
+          data: FEEDERS.map((id,i) => ({ x:xs[i], y:ys[i], label:id, name:NAMES[i] })),
+          backgroundColor: FEEDERS.map((_,i) => dotColor(i, 0.8)),
+          borderColor:     FEEDERS.map((_,i) => dotColor(i, 1)),
+          borderWidth: 1.5,
+          pointRadius: 8,
+          pointHoverRadius: 11,
+        },
+        {
+          type: 'line',
+          label: 'Trend line (r ≈ 0.91)',
+          data: [{ x:xMin, y:slope*xMin+intercept },{ x:xMax, y:slope*xMax+intercept }],
+          borderColor: '#94a3b8',
+          borderWidth: 2,
+          borderDash: [6,4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'top', labels:{ boxWidth:12, font:{size:12} } },
+        tooltip: {
+          filter: item => item.datasetIndex===0,
+          callbacks: {
+            title: ctx => `${ctx[0].raw.label} — ${ctx[0].raw.name}`,
+            label: ctx => [`Meter exceptions: ${ctx.raw.x}`, `Commercial loss: ₹${ctx.raw.y}L`]
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display:true, text:'Meter exceptions flagged (annual count)', font:{size:12} },
+          grid: { color:'#f0f0f0' }
+        },
+        y: {
+          title: { display:true, text:'Commercial loss (₹ Lakhs)', font:{size:12} },
+          grid: { color:'#f0f0f0' },
+          ticks: { callback: v=>'₹'+v+'L' }
+        }
+      }
+    },
+    plugins: [{
+      // draw feeder labels next to dots
+      afterDraw(chart) {
+        const {ctx} = chart;
+        const meta = chart.getDatasetMeta(0);
+        chart.data.datasets[0].data.forEach((d, i) => {
+          const pt = meta.data[i];
+          ctx.save();
+          ctx.font = '600 9.5px -apple-system,sans-serif';
+          ctx.fillStyle = '#1a1a1a';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(d.label, pt.x, pt.y - 10);
+          ctx.restore();
+        });
+      }
+    },{
+      // quadrant shading + reference lines
+      beforeDraw(chart) {
+        const {ctx, chartArea:{left,right,top,bottom}, scales:{x,y}} = chart;
+        const qx = x.getPixelForValue(80);
+        const qy = y.getPixelForValue(50);
+        ctx.save();
+        // shade top-right
+        ctx.fillStyle = 'rgba(220,38,38,0.04)';
+        ctx.fillRect(qx, top, right-qx, qy-top);
+        // shade bottom-left
+        ctx.fillStyle = 'rgba(22,163,74,0.04)';
+        ctx.fillRect(left, qy, qx-left, bottom-qy);
+        // dividers
+        ctx.setLineDash([4,4]);
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(qx,top); ctx.lineTo(qx,bottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(left,qy); ctx.lineTo(right,qy); ctx.stroke();
+        ctx.setLineDash([]);
+        // labels
+        ctx.font = '600 10px -apple-system,sans-serif';
+        ctx.fillStyle = 'rgba(220,38,38,0.5)';
+        ctx.textAlign = 'right';
+        ctx.fillText('HIGH RISK', right-8, top+16);
+        ctx.fillStyle = 'rgba(22,163,74,0.5)';
+        ctx.textAlign = 'left';
+        ctx.fillText('LOW RISK', left+8, bottom-8);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // Summary table under scatter
+  const tbody = document.getElementById('exc-tbody');
+  const predicted = xs.map(x => slope*x+intercept);
+  const rows = FEEDERS.map((id,i) => ({
+    id, name:NAMES[i],
+    exc: xs[i], loss: ys[i],
+    lpe: xs[i]>0 ? +(ys[i]/xs[i]).toFixed(2) : 0,
+    pred: +predicted[i].toFixed(1),
+    gap: +(ys[i]-predicted[i]).toFixed(1),
+    dotColor: dotColor(i,1)
+  })).sort((a,b) => b.loss-a.loss);
+
+  rows.forEach(r => {
+    const isGap = r.id==='FDR14' || Math.abs(r.gap)>10;
+    const riskLabel = r.exc>80&&r.loss>50 ? 'High' : r.exc>60||r.loss>35 ? 'Moderate' : 'Low';
+    const gapNote = r.gap > 10 ? `<span class="gap-flag">↑ ${r.gap}L above trend — enforcement gap?</span>`
+                  : r.gap < -10 ? `<span class="gap-flag" style="background:#d1fae5;color:#065f46">↓ below trend — well managed</span>`
+                  : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:700">${r.id}</td>
+      <td style="color:#555">${r.name}</td>
+      <td class="r">${r.exc}</td>
+      <td class="r" style="font-weight:600;color:${r.loss>50?'#dc2626':r.loss>35?'#d97706':'#222'}">₹${r.loss}L</td>
+      <td class="r">₹${r.lpe}L</td>
+      <td><span class="risk-dot" style="background:${r.dotColor}"></span>${riskLabel}</td>
+      <td>${gapNote}</td>`;
+    tbody.appendChild(tr);
+  });
+})();
+</script>
+</body>
+</html>

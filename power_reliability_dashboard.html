@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Power Distribution Reliability Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --bg4: #1e2d45;
+    --border: #1f3050;
+    --border2: #2a4060;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --accent: #00d4ff;
+    --accent2: #0099cc;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --red2: #dc2626;
+    --purple: #8b5cf6;
+    --glow: rgba(0,212,255,0.15);
+    --glow-red: rgba(239,68,68,0.15);
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(180deg, #0d1525 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo-mark {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .header-title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+  .header-sub { font-size: 11px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.05em; margin-top: 1px; }
+  .header-meta { display: flex; align-items: center; gap: 20px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-family: var(--mono); color: var(--green);
+    letter-spacing: 0.05em;
+  }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .period-badge {
+    font-size: 11px; font-family: var(--mono); color: var(--text3);
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 4px;
+  }
+
+  /* ── TABS ── */
+  .tabs-bar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    padding: 0 28px;
+    gap: 0;
+  }
+  .tab {
+    padding: 14px 22px;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.05em;
+    font-family: var(--mono);
+    color: var(--text3);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── MAIN ── */
+  .main { padding: 24px 28px; max-width: 1600px; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── KPI CARDS ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 22px; }
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.15s;
+    cursor: pointer;
+  }
+  .kpi-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .kpi-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  }
+  .kpi-card.ok::before { background: var(--green); }
+  .kpi-card.warn::before { background: var(--amber); }
+  .kpi-card.crit::before { background: var(--red); }
+  .kpi-card.info::before { background: var(--accent); }
+  .kpi-card.purple::before { background: var(--purple); }
+
+  .kpi-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  .kpi-value { font-size: 28px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .kpi-card.ok .kpi-value { color: var(--green); }
+  .kpi-card.warn .kpi-value { color: var(--amber); }
+  .kpi-card.crit .kpi-value { color: var(--red); }
+  .kpi-card.info .kpi-value { color: var(--accent); }
+  .kpi-card.purple .kpi-value { color: var(--purple); }
+  .kpi-unit { font-size: 11px; color: var(--text3); margin-top: 4px; font-family: var(--mono); }
+  .kpi-sub { font-size: 11px; color: var(--text3); margin-top: 8px; display: flex; align-items: center; gap: 5px; }
+  .kpi-badge { font-size: 9px; font-family: var(--mono); padding: 2px 6px; border-radius: 3px; letter-spacing: 0.04em; }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+  .badge-green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  .badge-blue { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.25); }
+
+  /* ── GRID SECTIONS ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; font-family: var(--mono); color: var(--text2); }
+  .card-body { padding: 18px; }
+  .card-meta { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.04em; }
+
+  /* ── TABLE ── */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+  .data-table th { padding: 8px 12px; text-align: left; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border); font-weight: 500; white-space: nowrap; }
+  .data-table td { padding: 9px 12px; border-bottom: 1px solid rgba(31,48,80,0.5); vertical-align: middle; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .row-id { color: var(--text3); font-size: 10px; }
+  .feeder-tag { font-size: 11px; font-weight: 600; color: var(--accent); }
+  .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; letter-spacing: 0.04em; }
+  .pill-crit { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+  .pill-warn { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+  .pill-ok { background: rgba(16,185,129,0.12); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+
+  /* ── BAR MINI ── */
+  .mini-bar-wrap { background: var(--bg3); border-radius: 2px; height: 4px; flex: 1; margin-left: 8px; overflow: hidden; }
+  .mini-bar { height: 100%; border-radius: 2px; }
+  .val-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .val-label { font-size: 11px; color: var(--text2); min-width: 120px; }
+  .val-num { font-size: 11px; font-family: var(--mono); min-width: 50px; text-align: right; }
+
+  /* ── CHART CONTAINERS ── */
+  .chart-container { position: relative; }
+  canvas { max-width: 100%; }
+
+  /* ── ALERT PANEL ── */
+  .alert-list { display: flex; flex-direction: column; gap: 8px; }
+  .alert-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 10px 12px; border-radius: 6px;
+    border-left: 3px solid;
+    background: var(--bg3);
+  }
+  .alert-item.crit { border-color: var(--red); }
+  .alert-item.warn { border-color: var(--amber); }
+  .alert-item.info { border-color: var(--accent); }
+  .alert-icon { font-size: 14px; margin-top: 1px; }
+  .alert-title { font-size: 12px; font-weight: 600; }
+  .alert-desc { font-size: 11px; color: var(--text2); margin-top: 2px; line-height: 1.5; }
+  .alert-meta { font-size: 10px; font-family: var(--mono); color: var(--text3); margin-top: 4px; }
+
+  /* ── HEATMAP ── */
+  .heatmap-grid { display: grid; grid-template-columns: 80px repeat(12,1fr); gap: 2px; font-size: 10px; font-family: var(--mono); }
+  .hm-header { padding: 4px; text-align: center; color: var(--text3); font-size: 9px; }
+  .hm-label { padding: 4px 6px; color: var(--text2); display: flex; align-items: center; font-size: 10px; }
+  .hm-cell {
+    height: 22px; border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: rgba(255,255,255,0.7);
+    cursor: pointer; transition: transform 0.1s;
+    font-family: var(--mono);
+  }
+  .hm-cell:hover { transform: scale(1.15); z-index: 2; }
+
+  /* ── DRILL-DOWN ── */
+  .drilldown-panel {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 18px;
+    margin-top: 14px;
+    display: none;
+  }
+  .drilldown-panel.open { display: block; }
+  .drilldown-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .drilldown-title { font-size: 13px; font-weight: 600; color: var(--accent); font-family: var(--mono); }
+  .close-btn { background: none; border: 1px solid var(--border2); color: var(--text3); cursor: pointer; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-family: var(--mono); }
+  .close-btn:hover { color: var(--text); border-color: var(--text3); }
+  .source-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .source-chip { font-size: 10px; font-family: var(--mono); padding: 3px 8px; border-radius: 3px; background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); color: var(--accent); }
+
+  /* ── EXPLORER TAB ── */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+  /* ── RAG TAB ── */
+  .rag-layout { display: grid; grid-template-columns: 1fr 380px; gap: 14px; }
+  .chat-area {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    display: flex; flex-direction: column; height: 620px;
+  }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .chat-input-row {
+    padding: 14px 18px; border-top: 1px solid var(--border);
+    display: flex; gap: 10px;
+  }
+  .chat-input {
+    flex: 1; background: var(--bg3); border: 1px solid var(--border2); color: var(--text);
+    padding: 10px 14px; border-radius: 6px; font-family: var(--sans); font-size: 13px;
+    outline: none; resize: none; min-height: 42px; max-height: 100px;
+  }
+  .chat-input:focus { border-color: var(--accent2); }
+  .chat-input::placeholder { color: var(--text3); }
+  .send-btn {
+    background: var(--accent); color: #000; border: none; padding: 10px 18px;
+    border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;
+    transition: background 0.2s; white-space: nowrap;
+  }
+  .send-btn:hover { background: var(--accent2); }
+  .send-btn:disabled { background: var(--bg4); color: var(--text3); cursor: not-allowed; }
+
+  .msg { max-width: 100%; }
+  .msg-user .msg-bubble {
+    background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2);
+    padding: 10px 14px; border-radius: 8px 8px 2px 8px;
+    font-size: 13px; line-height: 1.6; align-self: flex-end;
+    margin-left: 40px;
+  }
+  .msg-assistant .msg-bubble {
+    background: var(--bg3); border: 1px solid var(--border);
+    padding: 12px 16px; border-radius: 2px 8px 8px 8px;
+    font-size: 13px; line-height: 1.7;
+  }
+  .msg-role { font-size: 10px; font-family: var(--mono); color: var(--text3); margin-bottom: 5px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .cite-tag {
+    display: inline-block; font-size: 10px; font-family: var(--mono);
+    background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3);
+    color: #a78bfa; padding: 1px 5px; border-radius: 3px; margin: 0 2px;
+  }
+  .thinking { color: var(--text3); font-style: italic; font-size: 12px; }
+  .suggested-q { 
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .sugg-btn {
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
+    padding: 8px 12px; border-radius: 6px; text-align: left; cursor: pointer;
+    font-size: 12px; font-family: var(--sans); transition: all 0.15s;
+    line-height: 1.4;
+  }
+  .sugg-btn:hover { border-color: var(--accent2); color: var(--text); background: var(--bg4); }
+
+  /* ── AGENTIC TAB ── */
+  .agent-layout { display: grid; grid-template-columns: 260px 1fr; gap: 14px; }
+  .tools-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; }
+  .tool-item {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .tool-item:last-child { border-bottom: none; }
+  .tool-item:hover { background: var(--bg3); }
+  .tool-name { font-size: 12px; font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .tool-desc { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .tool-params { font-size: 10px; font-family: var(--mono); color: var(--purple); margin-top: 4px; }
+
+  .agent-terminal {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    display: flex; flex-direction: column; height: 620px;
+  }
+  .terminal-header {
+    padding: 10px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .term-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .term-title { font-size: 11px; font-family: var(--mono); color: var(--text3); margin-left: 6px; letter-spacing: 0.04em; }
+  .terminal-body { flex: 1; overflow-y: auto; padding: 16px 18px; font-family: var(--mono); font-size: 12px; }
+  .terminal-input-row { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .term-input {
+    flex: 1; background: var(--bg3); border: 1px solid var(--border2); color: var(--green);
+    padding: 8px 12px; border-radius: 4px; font-family: var(--mono); font-size: 12px; outline: none;
+  }
+  .term-input:focus { border-color: var(--green); }
+  .term-run-btn {
+    background: var(--green); color: #000; border: none; padding: 8px 16px;
+    border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 12px; font-family: var(--mono);
+  }
+
+  .term-line { margin-bottom: 3px; line-height: 1.6; }
+  .term-prompt { color: var(--green); }
+  .term-cmd { color: var(--text); }
+  .term-output { color: var(--text2); }
+  .term-tool { color: var(--accent); }
+  .term-result { color: var(--amber); }
+  .term-error { color: var(--red); }
+  .term-comment { color: var(--text3); }
+  .term-separator { border-top: 1px solid var(--border); margin: 8px 0; }
+  .term-table { border-collapse: collapse; width: 100%; color: var(--text2); }
+  .term-table th { color: var(--text3); border-bottom: 1px solid var(--border); padding: 4px 8px; text-align: left; font-size: 10px; }
+  .term-table td { padding: 4px 8px; font-size: 11px; border-bottom: 1px dashed rgba(31,48,80,0.5); }
+  .agent-goal-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 14px; }
+  .agent-goal-btn {
+    background: var(--bg2); border: 1px solid var(--border2); color: var(--text2);
+    padding: 10px 14px; border-radius: 6px; cursor: pointer; text-align: left;
+    font-size: 12px; font-family: var(--sans); transition: all 0.15s; line-height: 1.5;
+  }
+  .agent-goal-btn:hover { border-color: var(--green); color: var(--text); }
+  .agent-goal-btn .goal-icon { font-size: 16px; margin-bottom: 4px; display: block; }
+
+  /* ── MISC ── */
+  .section-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+  .scrollable { overflow-y: auto; max-height: 340px; }
+  .scrollable::-webkit-scrollbar { width: 4px; }
+  .scrollable::-webkit-scrollbar-track { background: var(--bg2); }
+  .scrollable::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-track { background: var(--bg2); }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .terminal-body::-webkit-scrollbar { width: 4px; }
+  .terminal-body::-webkit-scrollbar-track { background: var(--bg2); }
+  .terminal-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .api-key-bar {
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px;
+    padding: 10px 16px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .api-key-bar label { font-size: 11px; font-family: var(--mono); color: var(--text3); white-space: nowrap; }
+  .api-key-input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border2); color: var(--text);
+    padding: 7px 10px; border-radius: 4px; font-family: var(--mono); font-size: 12px; outline: none;
+  }
+  .api-key-input:focus { border-color: var(--accent2); }
+  .api-key-input::placeholder { color: var(--text3); }
+
+  .spark { display: inline-block; margin: 0 2px; }
+
+  @media (max-width: 1200px) {
+    .kpi-row { grid-template-columns: repeat(3,1fr); }
+    .grid-2, .grid-2-1, .chart-grid { grid-template-columns: 1fr; }
+    .rag-layout, .agent-layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo-mark">⚡</div>
+    <div>
+      <div class="header-title">Power Distribution Reliability Dashboard</div>
+      <div class="header-sub">DISCOM ANALYTICS · 16 FEEDERS · 6 SUBSTATIONS · 4 DIVISIONS</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="live-badge"><div class="live-dot"></div>MONITORING ACTIVE</div>
+    <div class="period-badge">JUN 2025 – MAY 2026</div>
+  </div>
+</header>
+
+<div style="background:var(--bg2); border-bottom:1px solid var(--border); padding:0 28px; display:flex; gap:0;" class="tabs-bar">
+  <div class="tab active" onclick="switchTab('dashboard',this)">01 · Dashboard</div>
+  <div class="tab" onclick="switchTab('explorer',this)">02 · Exploratory Analysis</div>
+  <div class="tab" onclick="switchTab('rag',this)">03 · RAG Q&amp;A</div>
+  <div class="tab" onclick="switchTab('agentic',this)">04 · Agentic Investigation</div>
+</div>
+
+<div class="main">
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 1 — DASHBOARD
+     ═══════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-dashboard">
+
+  <div class="kpi-row">
+    <div class="kpi-card crit" onclick="openDrill('kpi-atc')">
+      <div class="kpi-label">Worst AT&C Loss</div>
+      <div class="kpi-value">27.9<span style="font-size:16px">%</span></div>
+      <div class="kpi-unit">FDR07 Old City West</div>
+      <div class="kpi-sub"><span class="kpi-badge badge-red">CRITICAL</span></div>
+    </div>
+    <div class="kpi-card warn" onclick="openDrill('kpi-saidi')">
+      <div class="kpi-label">Worst SAIDI</div>
+      <div class="kpi-value">596</div>
+      <div class="kpi-unit">mins — FDR09 Industrial North</div>
+      <div class="kpi-sub"><span class="kpi-badge badge-amber">HIGH RISK</span></div>
+    </div>
+    <div class="kpi-card crit" onclick="openDrill('kpi-overload')">
+      <div class="kpi-label">Transformer Overload</div>
+      <div class="kpi-value">FDR14</div>
+      <div class="kpi-unit">Civic Hospital — Critical Load</div>
+      <div class="kpi-sub"><span class="kpi-badge badge-red">OVERLOADED</span></div>
+    </div>
+    <div class="kpi-card warn" onclick="openDrill('kpi-sla')">
+      <div class="kpi-label">Highest SLA Breach</div>
+      <div class="kpi-value">59.3<span style="font-size:16px">%</span></div>
+      <div class="kpi-unit">FDR07 Old City West</div>
+      <div class="kpi-sub"><span class="kpi-badge badge-amber">SLA FAIL</span></div>
+    </div>
+    <div class="kpi-card purple" onclick="openDrill('kpi-cmi')">
+      <div class="kpi-label">Peak CMI (Underground)</div>
+      <div class="kpi-value">4.6<span style="font-size:16px">M</span></div>
+      <div class="kpi-unit">Cable fault interruption mins</div>
+      <div class="kpi-sub"><span class="kpi-badge" style="background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.3)">FAULT TYPE #1</span></div>
+    </div>
+  </div>
+
+  <!-- Drill-down panel -->
+  <div class="drilldown-panel" id="drilldown">
+    <div class="drilldown-header">
+      <div class="drilldown-title" id="drill-title">Drill-down</div>
+      <button class="close-btn" onclick="closeDrill()">✕ Close</button>
+    </div>
+    <div class="source-chips" id="drill-sources"></div>
+    <div id="drill-content"></div>
+  </div>
+
+  <div class="grid-2-1">
+    <!-- Feeder Performance Table -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Feeder Performance Overview</span>
+        <span class="card-meta">TABLE: feeder_metrics · 16 rows</span>
+      </div>
+      <div class="scrollable">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Row</th><th>Feeder ID</th><th>Substation</th><th>Division</th>
+              <th>AT&C Loss</th><th>SAIDI (min)</th><th>SAIFI</th><th>SLA Breach</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="feeder-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Alert Panel -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Active Alerts</span>
+        <span class="card-meta">TABLE: alerts · 8 rows</span>
+      </div>
+      <div class="card-body">
+        <div class="alert-list">
+          <div class="alert-item crit">
+            <div class="alert-icon">🔴</div>
+            <div>
+              <div class="alert-title">FDR14 — Transformer Critical Overload</div>
+              <div class="alert-desc">Civic Hospital feeders showing sustained overload. Load factor exceeds rated capacity. Immediate intervention required.</div>
+              <div class="alert-meta">ROW: alerts#R01 · TABLE: transformer_health · FEEDER: FDR14</div>
+            </div>
+          </div>
+          <div class="alert-item crit">
+            <div class="alert-icon">🔴</div>
+            <div>
+              <div class="alert-title">FDR07 — Highest AT&C Loss 27.9%</div>
+              <div class="alert-desc">Old City West distribution losses exceeding regulatory threshold. Probable cause: meter tampering + technical losses.</div>
+              <div class="alert-meta">ROW: alerts#R02 · TABLE: feeder_metrics · FEEDER: FDR07</div>
+            </div>
+          </div>
+          <div class="alert-item warn">
+            <div class="alert-icon">🟡</div>
+            <div>
+              <div class="alert-title">FDR09 — SAIDI 596 mins (Worst)</div>
+              <div class="alert-desc">Industrial North outage duration at critical level. Repeated feeder trips impacting industrial consumers.</div>
+              <div class="alert-meta">ROW: alerts#R03 · TABLE: feeder_metrics · FEEDER: FDR09</div>
+            </div>
+          </div>
+          <div class="alert-item warn">
+            <div class="alert-icon">🟡</div>
+            <div>
+              <div class="alert-title">Underground Cable Fault — Peak CMI 4.6M</div>
+              <div class="alert-desc">Highest customer minutes interrupted from underground cable faults. Cable corridor aging inspection recommended.</div>
+              <div class="alert-meta">ROW: alerts#R04 · TABLE: fault_analysis · FAULT_TYPE: UG_CABLE</div>
+            </div>
+          </div>
+          <div class="alert-item info">
+            <div class="alert-icon">🔵</div>
+            <div>
+              <div class="alert-title">FDR07 — SLA Breach Rate 59.3%</div>
+              <div class="alert-desc">Restoration SLA compliance critically low. Customer escalations elevated in Old City West zone.</div>
+              <div class="alert-meta">ROW: alerts#R05 · TABLE: sla_compliance · FEEDER: FDR07</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Heatmap + CMI -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">SAIDI Heatmap — Feeders × Months</span>
+        <span class="card-meta">TABLE: monthly_saidi · 192 rows</span>
+      </div>
+      <div class="card-body">
+        <div id="heatmap-container"></div>
+        <div style="display:flex;gap:16px;margin-top:12px;align-items:center;">
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">SAIDI scale:</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <div style="width:60px;height:8px;border-radius:2px;background:linear-gradient(to right,#1a2235,#f59e0b,#ef4444);"></div>
+            <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">0 → 600 mins</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">AT&C Loss by Feeder</span>
+        <span class="card-meta">TABLE: feeder_metrics · col: atc_loss</span>
+      </div>
+      <div class="card-body">
+        <div id="atc-bars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fault Type + Division -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Fault CMI by Type</span>
+        <span class="card-meta">TABLE: fault_analysis · 6 fault types</span>
+      </div>
+      <div class="card-body">
+        <div class="chart-container" style="height:200px">
+          <canvas id="faultChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Division Performance Matrix</span>
+        <span class="card-meta">TABLE: division_summary · 4 rows</span>
+      </div>
+      <div class="card-body">
+        <table class="data-table">
+          <thead>
+            <tr><th>Row</th><th>Division</th><th>Avg AT&C</th><th>Avg SAIDI</th><th>Feeders</th><th>Risk</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="row-id">R01</td><td class="feeder-tag">North</td><td>14.2%</td><td>312</td><td>4</td><td><span class="status-pill pill-warn">WARN</span></td></tr>
+            <tr><td class="row-id">R02</td><td class="feeder-tag">South</td><td>11.8%</td><td>198</td><td>4</td><td><span class="status-pill pill-ok">OK</span></td></tr>
+            <tr><td class="row-id">R03</td><td class="feeder-tag">East</td><td>22.1%</td><td>487</td><td>4</td><td><span class="status-pill pill-crit">CRIT</span></td></tr>
+            <tr><td class="row-id">R04</td><td class="feeder-tag">West</td><td>19.4%</td><td>421</td><td>4</td><td><span class="status-pill pill-crit">CRIT</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-dashboard -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 2 — EXPLORER
+     ═══════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-explorer">
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">SAIDI Distribution — All 16 Feeders</span>
+        <span class="card-meta">TABLE: feeder_metrics</span>
+      </div>
+      <div class="card-body"><div class="chart-container" style="height:240px"><canvas id="saidiBar"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">AT&C vs SAIDI Scatter — Risk Quadrant</span>
+        <span class="card-meta">TABLE: feeder_metrics</span>
+      </div>
+      <div class="card-body"><div class="chart-container" style="height:240px"><canvas id="scatterChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Monthly SAIDI Trend — Top 4 Worst Feeders</span>
+        <span class="card-meta">TABLE: monthly_saidi · 12 months</span>
+      </div>
+      <div class="card-body"><div class="chart-container" style="height:240px"><canvas id="trendChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">SLA Breach % by Feeder</span>
+        <span class="card-meta">TABLE: sla_compliance</span>
+      </div>
+      <div class="card-body"><div class="chart-container" style="height:240px"><canvas id="slaChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">SAIFI Comparison — All Feeders</span>
+        <span class="card-meta">TABLE: feeder_metrics · col: saifi</span>
+      </div>
+      <div class="card-body"><div class="chart-container" style="height:240px"><canvas id="saifiChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Fault CMI by Type — Breakdown</span>
+        <span class="card-meta">TABLE: fault_analysis · 6 types</span>
+      </div>
+      <div class="card-body"><div class="chart-container" style="height:240px"><canvas id="faultPieChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Substation-Level Summary</span>
+      <span class="card-meta">TABLE: substation_summary · 6 rows</span>
+    </div>
+    <div class="card-body">
+      <table class="data-table">
+        <thead>
+          <tr><th>Row</th><th>Substation</th><th>Feeders</th><th>Avg AT&C Loss</th><th>Peak SAIDI</th><th>Transformer Status</th><th>CMI (M)</th><th>Risk</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="row-id">R01</td><td class="feeder-tag">SS-Alpha</td><td>3</td><td>13.4%</td><td>284</td><td><span class="status-pill pill-ok">NORMAL</span></td><td>1.2</td><td><span class="status-pill pill-ok">OK</span></td></tr>
+          <tr><td class="row-id">R02</td><td class="feeder-tag">SS-Beta</td><td>3</td><td>27.1%</td><td>596</td><td><span class="status-pill pill-warn">MARGINAL</span></td><td>3.8</td><td><span class="status-pill pill-crit">CRIT</span></td></tr>
+          <tr><td class="row-id">R03</td><td class="feeder-tag">SS-Civic</td><td>2</td><td>18.9%</td><td>432</td><td><span class="status-pill pill-crit">OVERLOAD</span></td><td>2.7</td><td><span class="status-pill pill-crit">CRIT</span></td></tr>
+          <tr><td class="row-id">R04</td><td class="feeder-tag">SS-Delta</td><td>3</td><td>11.2%</td><td>187</td><td><span class="status-pill pill-ok">NORMAL</span></td><td>0.9</td><td><span class="status-pill pill-ok">OK</span></td></tr>
+          <tr><td class="row-id">R05</td><td class="feeder-tag">SS-East</td><td>3</td><td>21.7%</td><td>498</td><td><span class="status-pill pill-warn">MARGINAL</span></td><td>3.1</td><td><span class="status-pill pill-warn">WARN</span></td></tr>
+          <tr><td class="row-id">R06</td><td class="feeder-tag">SS-South</td><td>2</td><td>9.8%</td><td>142</td><td><span class="status-pill pill-ok">NORMAL</span></td><td>0.6</td><td><span class="status-pill pill-ok">OK</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /tab-explorer -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 3 — RAG Q&A
+     ═══════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-rag">
+  <div class="api-key-bar">
+    <label>🔑 ANTHROPIC_API_KEY</label>
+    <input type="password" class="api-key-input" id="apiKey" placeholder="sk-ant-api03-...  (stored in memory only)">
+    <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">Not stored · used per-request only</span>
+  </div>
+  <div class="rag-layout">
+    <div class="chat-area">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg msg-assistant">
+          <div class="msg-role">⚡ SYSTEM · RAG ANALYST</div>
+          <div class="msg-bubble">
+            Hello! I'm your AI reliability analyst with access to the Power Distribution dataset. I can answer questions with precise citations to <span class="cite-tag">TABLE:ROW</span> references. Ask me anything about feeders, fault analysis, or performance metrics.
+            <br><br>
+            <strong>Dataset in context:</strong> feeder_metrics (16 rows), monthly_saidi (192 rows), fault_analysis (6 rows), alerts (8 rows), sla_compliance (16 rows), transformer_health (16 rows), substation_summary (6 rows), division_summary (4 rows)
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chat-input" placeholder="Ask about feeders, faults, reliability metrics..." rows="1" onkeydown="chatKeydown(event)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendChat()">Send ↵</button>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Suggested Queries</span></div>
+        <div class="card-body">
+          <div class="suggested-q">
+            <button class="sugg-btn" onclick="askSuggested(this)">Which feeder has the worst AT&C loss and what are the likely causes?</button>
+            <button class="sugg-btn" onclick="askSuggested(this)">Compare SAIDI performance across all 4 divisions and identify the highest risk zone.</button>
+            <button class="sugg-btn" onclick="askSuggested(this)">What is the status of FDR14 Civic Hospital transformer and recommended actions?</button>
+            <button class="sugg-btn" onclick="askSuggested(this)">Rank all fault types by CMI and explain which needs priority remediation.</button>
+            <button class="sugg-btn" onclick="askSuggested(this)">Which feeders breach SLA more than 40% of the time and what patterns do they share?</button>
+            <button class="sugg-btn" onclick="askSuggested(this)">Summarize the top 3 interventions that would have the most reliability impact.</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Data Context</span></div>
+        <div class="card-body">
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:11px;font-family:var(--mono);color:var(--text3);">TABLES IN CONTEXT</div>
+            <div style="font-size:12px;color:var(--text2);">📋 feeder_metrics <span style="color:var(--text3)">· 16 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 monthly_saidi <span style="color:var(--text3)">· 192 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 fault_analysis <span style="color:var(--text3)">· 6 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 alerts <span style="color:var(--text3)">· 8 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 sla_compliance <span style="color:var(--text3)">· 16 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 transformer_health <span style="color:var(--text3)">· 16 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 substation_summary <span style="color:var(--text3)">· 6 rows</span></div>
+            <div style="font-size:12px;color:var(--text2);">📋 division_summary <span style="color:var(--text3)">· 4 rows</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-rag -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB 4 — AGENTIC
+     ═══════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-agentic">
+  <div class="api-key-bar">
+    <label>🔑 ANTHROPIC_API_KEY</label>
+    <input type="password" class="api-key-input" id="apiKey2" placeholder="sk-ant-api03-...  (mirrors Tab 3 key)">
+    <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">Not stored · used per-request only</span>
+  </div>
+  <div class="agent-goal-row">
+    <button class="agent-goal-btn" onclick="runAgentGoal('worst_performers')">
+      <span class="goal-icon">📊</span>
+      Rank worst-performing feeders using list_tables + run_sql + rank_entities
+    </button>
+    <button class="agent-goal-btn" onclick="runAgentGoal('fault_priority')">
+      <span class="goal-icon">⚡</span>
+      Identify priority fault types by CMI impact and remediation urgency
+    </button>
+    <button class="agent-goal-btn" onclick="runAgentGoal('substation_risk')">
+      <span class="goal-icon">🏭</span>
+      Assess substation risk levels and transformer health status
+    </button>
+  </div>
+  <div class="agent-layout">
+    <div class="tools-panel">
+      <div class="card-header"><span class="card-title">Available Tools</span></div>
+      <div class="tool-item" onclick="insertTool('list_tables')">
+        <div class="tool-name">list_tables()</div>
+        <div class="tool-desc">Returns all available data tables with schema and row counts</div>
+        <div class="tool-params">→ returns: table_name, columns, row_count</div>
+      </div>
+      <div class="tool-item" onclick="insertTool('run_sql')">
+        <div class="tool-name">run_sql(query)</div>
+        <div class="tool-desc">Executes SQL-like query on in-memory dataset. Supports SELECT, WHERE, ORDER BY, GROUP BY</div>
+        <div class="tool-params">query: string → returns: rows[]</div>
+      </div>
+      <div class="tool-item" onclick="insertTool('rank_entities')">
+        <div class="tool-name">rank_entities(metric, limit)</div>
+        <div class="tool-desc">Ranks feeders/substations by specified metric with risk scoring</div>
+        <div class="tool-params">metric: string, limit: int → returns: ranked[]</div>
+      </div>
+      <div style="padding:12px 16px;">
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:8px;">TOOL CALL STATS</div>
+        <div id="tool-stats" style="font-size:11px;font-family:var(--mono);color:var(--text2);line-height:2;">
+          list_tables: 0 calls<br>run_sql: 0 calls<br>rank_entities: 0 calls
+        </div>
+      </div>
+    </div>
+    <div class="agent-terminal">
+      <div class="terminal-header">
+        <div class="term-dot" style="background:#ef4444"></div>
+        <div class="term-dot" style="background:#f59e0b"></div>
+        <div class="term-dot" style="background:#10b981"></div>
+        <div class="term-title">AGENT TERMINAL · POWER-RELIABILITY-AGENT v1.0 · AGENTIC LOOP ACTIVE</div>
+      </div>
+      <div class="terminal-body" id="terminal-body">
+        <div class="term-line term-comment"># Power Distribution Reliability Agent</div>
+        <div class="term-line term-comment"># Tools: list_tables | run_sql | rank_entities</div>
+        <div class="term-line term-comment"># Period: Jun 2025 – May 2026 | 16 Feeders | 6 Substations</div>
+        <div class="term-separator"></div>
+        <div class="term-line term-output">Ready. Select a pre-built investigation above or type a custom query below.</div>
+        <div class="term-line" style="margin-top:6px"><span class="term-prompt">agent@reliability:~$ </span><span class="term-cmd" id="term-cursor">▋</span></div>
+      </div>
+      <div class="terminal-input-row">
+        <input class="term-input" id="term-input" placeholder="e.g. rank all feeders by AT&C loss  |  list tables  |  which substation has worst CMI?" onkeydown="termKeydown(event)">
+        <button class="term-run-btn" onclick="runAgentCustom()">▶ RUN</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /tab-agentic -->
+
+</div><!-- /main -->
+
+<script>
+// ══════════════════════════════════════
+//  DATA
+// ══════════════════════════════════════
+const FEEDERS = [
+  { id:'FDR01', name:'Old Town East',     sub:'SS-Alpha', div:'East',  atc:12.4, saidi:284, saifi:4.2, sla_breach:18.2, status:'ok',   rowid:'R01' },
+  { id:'FDR02', name:'Market Circle',     sub:'SS-Alpha', div:'East',  atc:15.7, saidi:321, saifi:4.8, sla_breach:24.5, status:'warn', rowid:'R02' },
+  { id:'FDR03', name:'River Bridge North',sub:'SS-Alpha', div:'North', atc:10.2, saidi:198, saifi:3.1, sla_breach:12.0, status:'ok',   rowid:'R03' },
+  { id:'FDR04', name:'Station Yard',      sub:'SS-Delta', div:'North', atc:9.8,  saidi:167, saifi:2.8, sla_breach:9.4,  status:'ok',   rowid:'R04' },
+  { id:'FDR05', name:'Harbor Road',       sub:'SS-South', div:'South', atc:8.9,  saidi:142, saifi:2.4, sla_breach:7.1,  status:'ok',   rowid:'R05' },
+  { id:'FDR06', name:'Green Valley',      sub:'SS-South', div:'South', atc:11.3, saidi:187, saifi:3.3, sla_breach:14.8, status:'ok',   rowid:'R06' },
+  { id:'FDR07', name:'Old City West',     sub:'SS-Beta',  div:'West',  atc:27.9, saidi:523, saifi:7.9, sla_breach:59.3, status:'crit', rowid:'R07' },
+  { id:'FDR08', name:'New Extension',     sub:'SS-Beta',  div:'West',  atc:18.6, saidi:412, saifi:5.9, sla_breach:38.2, status:'warn', rowid:'R08' },
+  { id:'FDR09', name:'Industrial North',  sub:'SS-Beta',  div:'North', atc:16.4, saidi:596, saifi:6.2, sla_breach:45.1, status:'crit', rowid:'R09' },
+  { id:'FDR10', name:'Tech Park South',   sub:'SS-Delta', div:'South', atc:13.1, saidi:231, saifi:3.8, sla_breach:19.6, status:'ok',   rowid:'R10' },
+  { id:'FDR11', name:'Residential Block A',sub:'SS-Delta',div:'East',  atc:14.2, saidi:298, saifi:4.4, sla_breach:22.3, status:'ok',   rowid:'R11' },
+  { id:'FDR12', name:'Commercial Hub',    sub:'SS-East',  div:'East',  atc:19.8, saidi:448, saifi:6.0, sla_breach:41.7, status:'warn', rowid:'R12' },
+  { id:'FDR13', name:'Heritage Quarter',  sub:'SS-East',  div:'East',  atc:23.4, saidi:512, saifi:7.1, sla_breach:51.2, status:'crit', rowid:'R13' },
+  { id:'FDR14', name:'Civic Hospital',    sub:'SS-Civic', div:'West',  atc:17.2, saidi:389, saifi:5.4, sla_breach:33.8, status:'crit', rowid:'R14' },
+  { id:'FDR15', name:'Airport Road',      sub:'SS-East',  div:'North', atc:14.8, saidi:276, saifi:4.1, sla_breach:21.0, status:'ok',   rowid:'R15' },
+  { id:'FDR16', name:'University Zone',   sub:'SS-Civic', div:'West',  atc:20.3, saidi:467, saifi:6.4, sla_breach:43.6, status:'warn', rowid:'R16' },
+];
+
+const FAULT_TYPES = [
+  { type:'Underground Cable', cmi:4.6, count:87,  rowid:'R01' },
+  { type:'Overhead Line',     cmi:3.2, count:124, rowid:'R02' },
+  { type:'Transformer Fail',  cmi:2.8, count:43,  rowid:'R03' },
+  { type:'Switching Error',   cmi:1.4, count:31,  rowid:'R04' },
+  { type:'Tree Contact',      cmi:1.1, count:98,  rowid:'R05' },
+  { type:'Animal Intrusion',  cmi:0.7, count:76,  rowid:'R06' },
+];
+
+const MONTHS = ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May'];
+
+// simulated monthly SAIDI for top feeders
+const MONTHLY_SAIDI = {
+  FDR07: [38,44,51,46,48,40,39,52,47,43,41,44],
+  FDR09: [44,51,58,62,54,48,45,56,52,57,53,76],
+  FDR13: [40,45,49,51,47,42,40,47,44,46,43,48],
+  FDR16: [36,40,44,48,42,37,35,43,40,42,40,40],
+};
+
+const RAG_CONTEXT = `
+You are an expert power distribution reliability analyst. The following data is in context:
+
+TABLE: feeder_metrics (16 rows)
+Columns: feeder_id, feeder_name, substation, division, atc_loss_pct, saidi_mins, saifi, sla_breach_pct, status
+
+Key rows:
+- feeder_metrics#R07: FDR07 Old City West | SS-Beta | West | atc=27.9% | saidi=523 | saifi=7.9 | sla_breach=59.3% | CRITICAL
+- feeder_metrics#R09: FDR09 Industrial North | SS-Beta | North | atc=16.4% | saidi=596 | saifi=6.2 | sla_breach=45.1% | CRITICAL
+- feeder_metrics#R13: FDR13 Heritage Quarter | SS-East | East | atc=23.4% | saidi=512 | saifi=7.1 | sla_breach=51.2% | CRITICAL
+- feeder_metrics#R14: FDR14 Civic Hospital | SS-Civic | West | atc=17.2% | saidi=389 | saifi=5.4 | sla_breach=33.8% | CRITICAL (transformer overload)
+- feeder_metrics#R16: FDR16 University Zone | SS-Civic | West | atc=20.3% | saidi=467 | saifi=6.4 | sla_breach=43.6% | WARN
+
+TABLE: fault_analysis (6 rows)
+- fault_analysis#R01: Underground Cable Fault | CMI=4.6M | 87 incidents
+- fault_analysis#R02: Overhead Line | CMI=3.2M | 124 incidents
+- fault_analysis#R03: Transformer Failure | CMI=2.8M | 43 incidents
+
+TABLE: transformer_health (16 rows)
+- transformer_health#R14: FDR14 | OVERLOADED | load_factor=1.28 | CRITICAL
+- transformer_health#R09: FDR09 | MARGINAL | load_factor=0.97
+
+TABLE: sla_compliance (16 rows)
+- sla_compliance#R07: FDR07 | breach_rate=59.3% | worst
+- sla_compliance#R09: FDR09 | breach_rate=45.1%
+
+TABLE: division_summary (4 rows)
+- division_summary#R03: East | avg_atc=22.1% | avg_saidi=487 | CRITICAL
+- division_summary#R04: West | avg_atc=19.4% | avg_saidi=421 | CRITICAL
+
+Period: Jun 2025 – May 2026 | 16 feeders | 6 substations | 4 divisions
+
+IMPORTANT: Always cite table and row IDs inline like [feeder_metrics#R07] after every specific data point. Be analytical and actionable. Provide root causes, recommendations, and priority rankings when relevant.
+`;
+
+// ══════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  el.classList.add('active');
+  if(tab==='explorer') initExplorerCharts();
+  // sync api key
+  if(tab==='agentic') {
+    document.getElementById('apiKey2').value = document.getElementById('apiKey').value;
+  }
+}
+document.getElementById('apiKey').addEventListener('input',()=>{
+  document.getElementById('apiKey2').value = document.getElementById('apiKey').value;
+});
+document.getElementById('apiKey2').addEventListener('input',()=>{
+  document.getElementById('apiKey').value = document.getElementById('apiKey2').value;
+});
+
+// ══════════════════════════════════════
+//  FEEDER TABLE
+// ══════════════════════════════════════
+function buildFeederTable() {
+  const tbody = document.getElementById('feeder-table-body');
+  FEEDERS.forEach(f => {
+    const statusMap = { ok:'pill-ok', warn:'pill-warn', crit:'pill-crit' };
+    const statusLabel = { ok:'OK', warn:'WARN', crit:'CRIT' };
+    tbody.innerHTML += `
+      <tr onclick="openDrill('feeder-${f.id}')" style="cursor:pointer">
+        <td class="row-id">${f.rowid}</td>
+        <td class="feeder-tag">${f.id}</td>
+        <td style="font-size:11px;color:var(--text2)">${f.name}</td>
+        <td style="font-size:11px;color:var(--text3)">${f.sub}</td>
+        <td style="font-size:11px;color:var(--text3)">${f.div}</td>
+        <td style="color:${f.atc>20?'var(--red)':f.atc>15?'var(--amber)':'var(--green)'};font-family:var(--mono)">${f.atc}%</td>
+        <td style="color:${f.saidi>500?'var(--red)':f.saidi>300?'var(--amber)':'var(--green)'};font-family:var(--mono)">${f.saidi}</td>
+        <td style="font-family:var(--mono);color:var(--text2)">${f.saifi}</td>
+        <td style="color:${f.sla_breach>50?'var(--red)':f.sla_breach>30?'var(--amber)':'var(--green)'};font-family:var(--mono)">${f.sla_breach}%</td>
+        <td><span class="status-pill ${statusMap[f.status]}">${statusLabel[f.status]}</span></td>
+      </tr>`;
+  });
+}
+
+// ══════════════════════════════════════
+//  HEATMAP
+// ══════════════════════════════════════
+function buildHeatmap() {
+  const container = document.getElementById('heatmap-container');
+  let html = '<div class="heatmap-grid">';
+  html += '<div class="hm-header"></div>';
+  MONTHS.forEach(m => html += `<div class="hm-header">${m}</div>`);
+  const topFeeders = FEEDERS.slice(6,14); // FDR07-FDR14
+  topFeeders.forEach((f,fi) => {
+    html += `<div class="hm-label">${f.id}</div>`;
+    MONTHS.forEach((m,mi) => {
+      const base = f.saidi / 12;
+      const val = Math.round(base * (0.7 + Math.random()*0.8));
+      const pct = Math.min(val/600, 1);
+      const r = Math.round(26 + pct * 213);
+      const g = Math.round(34 + (pct<0.5 ? pct*2*124 : (1-pct)*2*124));
+      const b = Math.round(53 - pct*53);
+      html += `<div class="hm-cell" style="background:rgb(${r},${g},${b})" title="${f.id} ${m}: ${val} mins">${val}</div>`;
+    });
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════
+//  AT&C MINI BARS
+// ══════════════════════════════════════
+function buildATCBars() {
+  const sorted = [...FEEDERS].sort((a,b)=>b.atc-a.atc);
+  const container = document.getElementById('atc-bars');
+  let html = '';
+  sorted.forEach(f => {
+    const pct = (f.atc/30)*100;
+    const color = f.atc>20?'var(--red)':f.atc>15?'var(--amber)':'var(--green)';
+    html += `
+      <div class="val-row" style="margin-bottom:5px">
+        <div class="val-label" style="font-size:11px;font-family:var(--mono);color:var(--text2);min-width:100px">${f.id}</div>
+        <div class="mini-bar-wrap" style="flex:1">
+          <div class="mini-bar" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="val-num" style="color:${color};font-family:var(--mono);font-size:11px;min-width:46px;text-align:right">${f.atc}%</div>
+      </div>`;
+  });
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════
+//  FAULT CHART (dashboard)
+// ══════════════════════════════════════
+function buildFaultChart() {
+  const ctx = document.getElementById('faultChart').getContext('2d');
+  new Chart(ctx, {
+    type:'bar',
+    data: {
+      labels: FAULT_TYPES.map(f=>f.type),
+      datasets:[{
+        label:'CMI (Millions)',
+        data: FAULT_TYPES.map(f=>f.cmi),
+        backgroundColor: ['#ef4444','#f59e0b','#8b5cf6','#00d4ff','#10b981','#64748b'].map(c=>c+'bb'),
+        borderColor: ['#ef4444','#f59e0b','#8b5cf6','#00d4ff','#10b981','#64748b'],
+        borderWidth:1, borderRadius:3,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{
+        x:{ ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}}, grid:{color:'rgba(31,48,80,0.4)'} },
+        y:{ ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}}, grid:{color:'rgba(31,48,80,0.4)'},
+            title:{display:true,text:'CMI (M)',color:'#64748b',font:{size:9}} }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════
+//  DRILL-DOWN
+// ══════════════════════════════════════
+const DRILL_DATA = {
+  'kpi-atc': {
+    title:'FDR07 Old City West — AT&C Loss 27.9%',
+    sources:['feeder_metrics#R07','division_summary#R04','alerts#R02'],
+    content:`<table class="data-table"><thead><tr><th>Field</th><th>Value</th><th>Source</th></tr></thead><tbody>
+      <tr><td>Feeder</td><td class="feeder-tag">FDR07 Old City West</td><td class="row-id">feeder_metrics#R07</td></tr>
+      <tr><td>AT&C Loss</td><td style="color:var(--red);font-family:var(--mono)">27.9%</td><td class="row-id">feeder_metrics#R07</td></tr>
+      <tr><td>Substation</td><td style="color:var(--text2)">SS-Beta</td><td class="row-id">feeder_metrics#R07</td></tr>
+      <tr><td>Division</td><td style="color:var(--text2)">West (avg 19.4%)</td><td class="row-id">division_summary#R04</td></tr>
+      <tr><td>Alert Status</td><td><span class="status-pill pill-crit">CRITICAL</span></td><td class="row-id">alerts#R02</td></tr>
+      <tr><td>Probable Cause</td><td style="color:var(--amber);font-size:11px">Meter tampering + technical losses</td><td class="row-id">alerts#R02</td></tr>
+    </tbody></table>`
+  },
+  'kpi-saidi': {
+    title:'FDR09 Industrial North — SAIDI 596 mins',
+    sources:['feeder_metrics#R09','monthly_saidi#R09','alerts#R03'],
+    content:`<table class="data-table"><thead><tr><th>Field</th><th>Value</th><th>Source</th></tr></thead><tbody>
+      <tr><td>Feeder</td><td class="feeder-tag">FDR09 Industrial North</td><td class="row-id">feeder_metrics#R09</td></tr>
+      <tr><td>SAIDI</td><td style="color:var(--red);font-family:var(--mono)">596 mins</td><td class="row-id">feeder_metrics#R09</td></tr>
+      <tr><td>SAIFI</td><td style="font-family:var(--mono);color:var(--text2)">6.2 interruptions/year</td><td class="row-id">feeder_metrics#R09</td></tr>
+      <tr><td>Peak Month</td><td style="color:var(--amber);font-family:var(--mono)">May 2026 — 76 mins/month</td><td class="row-id">monthly_saidi#R09</td></tr>
+      <tr><td>Substation</td><td style="color:var(--text2)">SS-Beta</td><td class="row-id">feeder_metrics#R09</td></tr>
+      <tr><td>Alert</td><td><span class="status-pill pill-warn">WARN</span> Repeated feeder trips</td><td class="row-id">alerts#R03</td></tr>
+    </tbody></table>`
+  },
+  'kpi-overload': {
+    title:'FDR14 Civic Hospital — Transformer Critical Overload',
+    sources:['transformer_health#R14','feeder_metrics#R14','alerts#R01'],
+    content:`<table class="data-table"><thead><tr><th>Field</th><th>Value</th><th>Source</th></tr></thead><tbody>
+      <tr><td>Feeder</td><td class="feeder-tag">FDR14 Civic Hospital</td><td class="row-id">feeder_metrics#R14</td></tr>
+      <tr><td>Transformer Status</td><td><span class="status-pill pill-crit">OVERLOADED</span></td><td class="row-id">transformer_health#R14</td></tr>
+      <tr><td>Load Factor</td><td style="color:var(--red);font-family:var(--mono)">1.28× rated capacity</td><td class="row-id">transformer_health#R14</td></tr>
+      <tr><td>SAIDI</td><td style="font-family:var(--mono);color:var(--amber)">389 mins</td><td class="row-id">feeder_metrics#R14</td></tr>
+      <tr><td>Critical Load Type</td><td style="color:var(--text2)">Hospital / Essential Services</td><td class="row-id">alerts#R01</td></tr>
+      <tr><td>Recommended Action</td><td style="color:var(--red);font-size:11px">Immediate load shedding / backup transformer</td><td class="row-id">alerts#R01</td></tr>
+    </tbody></table>`
+  },
+  'kpi-sla': {
+    title:'FDR07 Old City West — SLA Breach 59.3%',
+    sources:['sla_compliance#R07','feeder_metrics#R07','alerts#R05'],
+    content:`<table class="data-table"><thead><tr><th>Field</th><th>Value</th><th>Source</th></tr></thead><tbody>
+      <tr><td>Feeder</td><td class="feeder-tag">FDR07 Old City West</td><td class="row-id">feeder_metrics#R07</td></tr>
+      <tr><td>SLA Breach Rate</td><td style="color:var(--red);font-family:var(--mono)">59.3%</td><td class="row-id">sla_compliance#R07</td></tr>
+      <tr><td>Restoration SLA</td><td style="color:var(--text2)">4-hour target</td><td class="row-id">sla_compliance#R07</td></tr>
+      <tr><td>AT&C Loss (same feeder)</td><td style="color:var(--red);font-family:var(--mono)">27.9%</td><td class="row-id">feeder_metrics#R07</td></tr>
+      <tr><td>Escalations</td><td style="color:var(--amber)">Elevated — Old City West zone</td><td class="row-id">alerts#R05</td></tr>
+    </tbody></table>`
+  },
+  'kpi-cmi': {
+    title:'Underground Cable Fault — Peak CMI 4.6M',
+    sources:['fault_analysis#R01','alerts#R04'],
+    content:`<table class="data-table"><thead><tr><th>Field</th><th>Value</th><th>Source</th></tr></thead><tbody>
+      <tr><td>Fault Type</td><td class="feeder-tag">Underground Cable</td><td class="row-id">fault_analysis#R01</td></tr>
+      <tr><td>CMI</td><td style="color:var(--purple);font-family:var(--mono)">4.6 Million mins</td><td class="row-id">fault_analysis#R01</td></tr>
+      <tr><td>Incident Count</td><td style="font-family:var(--mono);color:var(--text2)">87 incidents</td><td class="row-id">fault_analysis#R01</td></tr>
+      <tr><td>Rank vs All Types</td><td style="color:var(--red)">Highest CMI — #1 of 6</td><td class="row-id">fault_analysis#R01</td></tr>
+      <tr><td>Recommendation</td><td style="color:var(--amber);font-size:11px">Cable corridor aging inspection</td><td class="row-id">alerts#R04</td></tr>
+    </tbody></table>`
+  }
+};
+
+// add feeder drill-downs dynamically
+FEEDERS.forEach(f => {
+  DRILL_DATA[`feeder-${f.id}`] = {
+    title:`${f.id} ${f.name} — Detailed View`,
+    sources:[`feeder_metrics#${f.rowid}`],
+    content:`<table class="data-table"><thead><tr><th>Metric</th><th>Value</th><th>Source</th></tr></thead><tbody>
+      <tr><td>Feeder ID</td><td class="feeder-tag">${f.id}</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>Name</td><td style="color:var(--text2)">${f.name}</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>Substation</td><td style="color:var(--text2)">${f.sub}</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>Division</td><td style="color:var(--text2)">${f.div}</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>AT&C Loss</td><td style="color:${f.atc>20?'var(--red)':f.atc>15?'var(--amber)':'var(--green)'};font-family:var(--mono)">${f.atc}%</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>SAIDI</td><td style="color:${f.saidi>500?'var(--red)':f.saidi>300?'var(--amber)':'var(--green)'};font-family:var(--mono)">${f.saidi} mins</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>SAIFI</td><td style="font-family:var(--mono);color:var(--text2)">${f.saifi}</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+      <tr><td>SLA Breach</td><td style="color:${f.sla_breach>50?'var(--red)':f.sla_breach>30?'var(--amber)':'var(--green)'};font-family:var(--mono)">${f.sla_breach}%</td><td class="row-id">feeder_metrics#${f.rowid}</td></tr>
+    </tbody></table>`
+  };
+});
+
+function openDrill(key) {
+  const d = DRILL_DATA[key];
+  if(!d) return;
+  document.getElementById('drill-title').textContent = d.title;
+  document.getElementById('drill-sources').innerHTML = d.sources.map(s=>`<span class="source-chip">${s}</span>`).join('');
+  document.getElementById('drill-content').innerHTML = d.content;
+  const panel = document.getElementById('drilldown');
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeDrill() {
+  document.getElementById('drilldown').classList.remove('open');
+}
+
+// ══════════════════════════════════════
+//  EXPLORER CHARTS
+// ══════════════════════════════════════
+let explorerInit = false;
+function initExplorerCharts() {
+  if(explorerInit) return;
+  explorerInit = true;
+
+  const sorted = [...FEEDERS].sort((a,b)=>b.saidi-a.saidi);
+  const colors = sorted.map(f=>f.saidi>500?'#ef4444':f.saidi>300?'#f59e0b':'#10b981');
+
+  // SAIDI bar
+  new Chart(document.getElementById('saidiBar').getContext('2d'), {
+    type:'bar',
+    data:{ labels:sorted.map(f=>f.id), datasets:[{data:sorted.map(f=>f.saidi),backgroundColor:colors.map(c=>c+'bb'),borderColor:colors,borderWidth:1,borderRadius:3}] },
+    options:{ responsive:true,maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'}},
+               y:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'},title:{display:true,text:'SAIDI (mins)',color:'#64748b',font:{size:9}}} } }
+  });
+
+  // Scatter
+  new Chart(document.getElementById('scatterChart').getContext('2d'), {
+    type:'scatter',
+    data:{ datasets:[{
+      data: FEEDERS.map(f=>({x:f.atc,y:f.saidi,label:f.id})),
+      backgroundColor: FEEDERS.map(f=>f.status==='crit'?'#ef4444bb':f.status==='warn'?'#f59e0bbb':'#10b981bb'),
+      pointRadius:6, pointHoverRadius:9
+    }] },
+    options:{ responsive:true,maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:d=>`${d.raw.label}: AT&C=${d.raw.x}% SAIDI=${d.raw.y}`}}},
+      scales:{ x:{title:{display:true,text:'AT&C Loss %',color:'#64748b',font:{size:9}},ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'}},
+               y:{title:{display:true,text:'SAIDI (mins)',color:'#64748b',font:{size:9}},ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'}} } }
+  });
+
+  // Trend
+  const tColors = ['#ef4444','#f59e0b','#8b5cf6','#00d4ff'];
+  const topIds = ['FDR07','FDR09','FDR13','FDR16'];
+  new Chart(document.getElementById('trendChart').getContext('2d'), {
+    type:'line',
+    data:{ labels:MONTHS, datasets: topIds.map((id,i)=>({
+      label:id, data:MONTHLY_SAIDI[id],
+      borderColor:tColors[i], backgroundColor:tColors[i]+'22',
+      fill:true, tension:0.4, pointRadius:3, borderWidth:2
+    })) },
+    options:{ responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#94a3b8',font:{size:10,family:'IBM Plex Mono'},boxWidth:12}}},
+      scales:{ x:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'}},
+               y:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'},title:{display:true,text:'SAIDI (mins/month)',color:'#64748b',font:{size:9}}} } }
+  });
+
+  // SLA
+  const slaS = [...FEEDERS].sort((a,b)=>b.sla_breach-a.sla_breach);
+  new Chart(document.getElementById('slaChart').getContext('2d'), {
+    type:'bar',
+    data:{ labels:slaS.map(f=>f.id), datasets:[{data:slaS.map(f=>f.sla_breach),
+      backgroundColor:slaS.map(f=>f.sla_breach>50?'#ef4444bb':f.sla_breach>30?'#f59e0bbb':'#10b981bb'),
+      borderColor:slaS.map(f=>f.sla_breach>50?'#ef4444':f.sla_breach>30?'#f59e0b':'#10b981'),
+      borderWidth:1,borderRadius:3}] },
+    options:{ responsive:true,maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'}},
+               y:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'},title:{display:true,text:'SLA Breach %',color:'#64748b',font:{size:9}}} } }
+  });
+
+  // SAIFI
+  const saifiS = [...FEEDERS].sort((a,b)=>b.saifi-a.saifi);
+  new Chart(document.getElementById('saifiChart').getContext('2d'), {
+    type:'bar',
+    data:{ labels:saifiS.map(f=>f.id), datasets:[{data:saifiS.map(f=>f.saifi),
+      backgroundColor:'#00d4ff44', borderColor:'#00d4ff', borderWidth:1, borderRadius:3}] },
+    options:{ responsive:true,maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'}},
+               y:{ticks:{color:'#64748b',font:{size:9,family:'IBM Plex Mono'}},grid:{color:'rgba(31,48,80,0.4)'},title:{display:true,text:'SAIFI (interruptions/yr)',color:'#64748b',font:{size:9}}} } }
+  });
+
+  // Fault pie
+  new Chart(document.getElementById('faultPieChart').getContext('2d'), {
+    type:'doughnut',
+    data:{ labels:FAULT_TYPES.map(f=>f.type), datasets:[{data:FAULT_TYPES.map(f=>f.cmi),
+      backgroundColor:['#ef4444bb','#f59e0bbb','#8b5cf6bb','#00d4ffbb','#10b981bb','#64748bbb'],
+      borderColor:['#ef4444','#f59e0b','#8b5cf6','#00d4ff','#10b981','#64748b'],
+      borderWidth:1}] },
+    options:{ responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:10,family:'IBM Plex Mono'},boxWidth:12}}} }
+  });
+}
+
+// ══════════════════════════════════════
+//  RAG Q&A
+// ══════════════════════════════════════
+function chatKeydown(e) {
+  if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+function askSuggested(btn) {
+  document.getElementById('chat-input').value = btn.textContent.trim();
+  sendChat();
+}
+function appendMsg(role, html) {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg msg-${role}`;
+  div.innerHTML = `<div class="msg-role">${role==='user'?'👤 YOU':'⚡ RELIABILITY ANALYST'}</div><div class="msg-bubble">${html}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const btn = document.getElementById('send-btn');
+  const q = input.value.trim();
+  if(!q) return;
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if(!apiKey) { appendMsg('assistant','<span style="color:var(--amber)">⚠ Please enter your Anthropic API key above to enable AI responses.</span>'); return; }
+  input.value=''; btn.disabled=true; btn.textContent='…';
+  appendMsg('user', q.replace(/</g,'&lt;'));
+  const thinkingDiv = document.createElement('div');
+  thinkingDiv.className='msg msg-assistant';
+  thinkingDiv.innerHTML='<div class="msg-role">⚡ RELIABILITY ANALYST</div><div class="msg-bubble thinking">Analyzing dataset…</div>';
+  document.getElementById('chat-messages').appendChild(thinkingDiv);
+  document.getElementById('chat-messages').scrollTop = 99999;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:1000,
+        system: RAG_CONTEXT,
+        messages:[{role:'user',content:q}]
+      })
+    });
+    const data = await res.json();
+    let text = '';
+    if(data.content) text = data.content.map(b=>b.text||'').join('');
+    else if(data.error) text = `<span style="color:var(--red)">API Error: ${data.error.message}</span>`;
+    // format citations
+    text = text.replace(/\[([a-z_]+#R\d+)\]/g,'<span class="cite-tag">$1</span>');
+    text = text.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+    text = text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+    thinkingDiv.querySelector('.msg-bubble').innerHTML = text;
+  } catch(err) {
+    thinkingDiv.querySelector('.msg-bubble').innerHTML = `<span style="color:var(--red)">Error: ${err.message}</span>`;
+  }
+  btn.disabled=false; btn.textContent='Send ↵';
+  document.getElementById('chat-messages').scrollTop = 99999;
+}
+
+// ══════════════════════════════════════
+//  AGENTIC TOOLS
+// ══════════════════════════════════════
+let toolStats = {list_tables:0, run_sql:0, rank_entities:0};
+function updateToolStats() {
+  document.getElementById('tool-stats').innerHTML = Object.entries(toolStats).map(([k,v])=>`${k}: ${v} call${v!==1?'s':''}`).join('<br>');
+}
+
+// Simulated tool execution on the in-memory dataset
+function tool_list_tables() {
+  toolStats.list_tables++;
+  return [
+    {table:'feeder_metrics', columns:['feeder_id','feeder_name','substation','division','atc_loss_pct','saidi_mins','saifi','sla_breach_pct','status'], rows:16},
+    {table:'monthly_saidi', columns:['feeder_id','month','saidi_mins'], rows:192},
+    {table:'fault_analysis', columns:['fault_type','cmi_millions','incident_count'], rows:6},
+    {table:'alerts', columns:['alert_id','feeder_id','severity','description'], rows:8},
+    {table:'sla_compliance', columns:['feeder_id','breach_rate_pct'], rows:16},
+    {table:'transformer_health', columns:['feeder_id','status','load_factor'], rows:16},
+    {table:'substation_summary', columns:['substation','feeders','avg_atc','peak_saidi','transformer_status','cmi_millions'], rows:6},
+    {table:'division_summary', columns:['division','avg_atc','avg_saidi','feeder_count','risk'], rows:4},
+  ];
+}
+
+function tool_run_sql(query) {
+  toolStats.run_sql++;
+  query = query.toLowerCase();
+  if(query.includes('feeder_metrics') && (query.includes('order by atc') || query.includes('atc_loss'))) {
+    return [...FEEDERS].sort((a,b)=>b.atc-a.atc).slice(0,5).map(f=>({feeder_id:f.id,feeder_name:f.name,atc_loss_pct:f.atc,status:f.status,rowid:f.rowid}));
+  }
+  if(query.includes('saidi') && query.includes('order')) {
+    return [...FEEDERS].sort((a,b)=>b.saidi-a.saidi).slice(0,5).map(f=>({feeder_id:f.id,feeder_name:f.name,saidi_mins:f.saidi,rowid:f.rowid}));
+  }
+  if(query.includes('fault')) {
+    return [...FAULT_TYPES].sort((a,b)=>b.cmi-a.cmi).map(f=>({fault_type:f.type,cmi_millions:f.cmi,incidents:f.count,rowid:f.rowid}));
+  }
+  if(query.includes('sla')) {
+    return [...FEEDERS].sort((a,b)=>b.sla_breach-a.sla_breach).slice(0,5).map(f=>({feeder_id:f.id,sla_breach_pct:f.sla_breach,rowid:f.rowid}));
+  }
+  if(query.includes('transformer') || query.includes('overload')) {
+    return [{feeder_id:'FDR14',feeder_name:'Civic Hospital',transformer_status:'OVERLOADED',load_factor:1.28,rowid:'transformer_health#R14'},{feeder_id:'FDR09',feeder_name:'Industrial North',transformer_status:'MARGINAL',load_factor:0.97,rowid:'transformer_health#R09'}];
+  }
+  return FEEDERS.map(f=>({feeder_id:f.id,atc_loss_pct:f.atc,saidi_mins:f.saidi}));
+}
+
+function tool_rank_entities(metric, limit=5) {
+  toolStats.rank_entities++;
+  let ranked;
+  if(metric==='atc_loss' || metric==='atc') ranked = [...FEEDERS].sort((a,b)=>b.atc-a.atc);
+  else if(metric==='saidi') ranked = [...FEEDERS].sort((a,b)=>b.saidi-a.saidi);
+  else if(metric==='sla_breach') ranked = [...FEEDERS].sort((a,b)=>b.sla_breach-a.sla_breach);
+  else if(metric==='saifi') ranked = [...FEEDERS].sort((a,b)=>b.saifi-a.saifi);
+  else ranked = [...FEEDERS].sort((a,b)=>b.atc-a.atc);
+  return ranked.slice(0,limit).map((f,i)=>({rank:i+1,feeder_id:f.id,feeder_name:f.name,value:metric==='saidi'?f.saidi:metric==='sla_breach'?f.sla_breach:metric==='saifi'?f.saifi:f.atc,risk:f.status,rowid:`feeder_metrics#${f.rowid}`}));
+}
+
+function termWrite(html) {
+  const tb = document.getElementById('terminal-body');
+  const div = document.createElement('div');
+  div.className='term-line';
+  div.innerHTML=html;
+  // remove cursor line if exists
+  const cursor = tb.querySelector('#term-cursor');
+  if(cursor) cursor.closest('.term-line').remove();
+  tb.appendChild(div);
+  // re-add cursor
+  const cl = document.createElement('div');
+  cl.className='term-line';
+  cl.innerHTML=`<span class="term-prompt">agent@reliability:~$ </span><span class="term-cmd" id="term-cursor">▋</span>`;
+  tb.appendChild(cl);
+  tb.scrollTop=tb.scrollHeight;
+}
+
+function termTable(rows, cols) {
+  if(!rows||!rows.length) return '<span class="term-output">(no results)</span>';
+  let h = '<table class="term-table" style="margin:4px 0"><thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  rows.forEach(r => { h+='<tr>'+cols.map(c=>`<td>${r[c]!==undefined?r[c]:''}</td>`).join('')+'</tr>'; });
+  h+='</tbody></table>';
+  return h;
+}
+
+async function delay(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+async function runAgentGoal(goal) {
+  const apiKey = document.getElementById('apiKey').value.trim() || document.getElementById('apiKey2').value.trim();
+
+  if(goal==='worst_performers') {
+    termWrite(`<span class="term-prompt">agent@reliability:~$ </span><span class="term-cmd">investigate --goal="rank worst-performing feeders"</span>`);
+    await delay(400);
+    termWrite(`<span class="term-tool">→ TOOL CALL: list_tables()</span>`);
+    await delay(500);
+    const tables = tool_list_tables();
+    termWrite(`<span class="term-result">✓ ${tables.length} tables available: ${tables.map(t=>t.table).join(', ')}</span>`);
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: run_sql("SELECT * FROM feeder_metrics ORDER BY atc_loss_pct DESC LIMIT 5")</span>`);
+    await delay(600);
+    const r1 = tool_run_sql('SELECT * FROM feeder_metrics ORDER BY atc_loss_pct DESC');
+    termWrite(termTable(r1,['feeder_id','feeder_name','atc_loss_pct','status','rowid']));
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: rank_entities(metric="saidi", limit=5)</span>`);
+    await delay(500);
+    const r2 = tool_rank_entities('saidi',5);
+    termWrite(termTable(r2,['rank','feeder_id','feeder_name','value','risk','rowid']));
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: rank_entities(metric="sla_breach", limit=5)</span>`);
+    await delay(500);
+    const r3 = tool_rank_entities('sla_breach',5);
+    termWrite(termTable(r3,['rank','feeder_id','feeder_name','value','risk','rowid']));
+    updateToolStats();
+    await delay(300);
+
+    if(apiKey) {
+      termWrite(`<span class="term-comment"># Synthesizing results via Claude claude-sonnet-4-6…</span>`);
+      const toolResults = JSON.stringify({atc_ranking:r1, saidi_ranking:r2, sla_ranking:r3});
+      await callAgentClaude(apiKey, `You are a power reliability agent. Using these tool results, provide a concise executive summary ranking the worst-performing feeders with source citations like [feeder_metrics#R07].\n\nTool results:\n${toolResults}`);
+    } else {
+      termWrite(`<span class="term-output">⚡ Analysis complete. Top findings:<br>&nbsp;&nbsp;• FDR07 Old City West: AT&C=27.9% [feeder_metrics#R07] | SLA=59.3% [sla_compliance#R07]<br>&nbsp;&nbsp;• FDR09 Industrial North: SAIDI=596 mins [feeder_metrics#R09] — worst duration<br>&nbsp;&nbsp;• FDR13 Heritage Quarter: AT&C=23.4%, SLA=51.2% [feeder_metrics#R13]<br>&nbsp;&nbsp;→ Provide API key for AI synthesis.</span>`);
+    }
+  }
+
+  else if(goal==='fault_priority') {
+    termWrite(`<span class="term-prompt">agent@reliability:~$ </span><span class="term-cmd">investigate --goal="fault type priority by CMI"</span>`);
+    await delay(400);
+    termWrite(`<span class="term-tool">→ TOOL CALL: list_tables()</span>`);
+    await delay(400);
+    tool_list_tables();
+    termWrite(`<span class="term-result">✓ Tables listed. Querying fault_analysis…</span>`);
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: run_sql("SELECT * FROM fault_analysis ORDER BY cmi_millions DESC")</span>`);
+    await delay(600);
+    const r = tool_run_sql('SELECT * FROM fault_analysis ORDER BY cmi');
+    termWrite(termTable(r,['fault_type','cmi_millions','incidents','rowid']));
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: rank_entities(metric="atc_loss", limit=16)</span>`);
+    await delay(400);
+    tool_rank_entities('atc_loss',16);
+    termWrite(`<span class="term-result">✓ Ranked. Underground Cable fault leads with CMI=4.6M [fault_analysis#R01]</span>`);
+    updateToolStats();
+    if(apiKey) {
+      termWrite(`<span class="term-comment"># Synthesizing via Claude claude-sonnet-4-6…</span>`);
+      await callAgentClaude(apiKey, `You are a power reliability agent. Analyze these fault types by CMI and provide prioritized remediation recommendations with citations like [fault_analysis#R01].\n\nFault data: ${JSON.stringify(r)}`);
+    } else {
+      termWrite(`<span class="term-output">⚡ Priority order: (1) Underground Cable 4.6M CMI [fault_analysis#R01] (2) Overhead Line 3.2M [fault_analysis#R02] (3) Transformer 2.8M [fault_analysis#R03]. Provide API key for full AI analysis.</span>`);
+    }
+  }
+
+  else if(goal==='substation_risk') {
+    termWrite(`<span class="term-prompt">agent@reliability:~$ </span><span class="term-cmd">investigate --goal="substation risk + transformer health"</span>`);
+    await delay(400);
+    termWrite(`<span class="term-tool">→ TOOL CALL: list_tables()</span>`);
+    await delay(400);
+    tool_list_tables();
+    termWrite(`<span class="term-result">✓ Querying substation_summary and transformer_health…</span>`);
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: run_sql("SELECT * FROM transformer_health WHERE status IN ('OVERLOADED','MARGINAL')")</span>`);
+    await delay(600);
+    const r = tool_run_sql('SELECT * FROM transformer_health WHERE overload');
+    termWrite(termTable(r,['feeder_id','feeder_name','transformer_status','load_factor','rowid']));
+    await delay(300);
+    termWrite(`<span class="term-tool">→ TOOL CALL: rank_entities(metric="saidi", limit=6)</span>`);
+    await delay(400);
+    const r2 = tool_rank_entities('saidi',6);
+    termWrite(termTable(r2,['rank','feeder_id','feeder_name','value','risk','rowid']));
+    updateToolStats();
+    if(apiKey) {
+      termWrite(`<span class="term-comment"># Synthesizing via Claude claude-sonnet-4-6…</span>`);
+      await callAgentClaude(apiKey, `You are a power reliability agent. Assess substation risk levels based on transformer health and SAIDI. FDR14 Civic Hospital has load_factor=1.28 (OVERLOADED). Provide risk assessment and urgent recommendations with citations.\n\nData: transformers=${JSON.stringify(r)}, saidi_ranking=${JSON.stringify(r2)}`);
+    } else {
+      termWrite(`<span class="term-output">⚡ Critical: FDR14 transformer overloaded at 1.28× [transformer_health#R14]. SS-Civic risk=HIGH. Immediate load redistribution needed. Provide API key for AI risk narrative.</span>`);
+    }
+  }
+}
+
+async function callAgentClaude(apiKey, prompt) {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    let text = (data.content||[]).map(b=>b.text||'').join('') || (data.error?`Error: ${data.error.message}`:'No response');
+    text = text.replace(/\[([a-z_]+#R\d+)\]/g,'<span style="color:var(--purple);font-family:var(--mono);font-size:10px">[$1]</span>');
+    text = text.replace(/\n/g,'<br>');
+    termWrite(`<span class="term-result">⚡ AGENT SYNTHESIS:<br>${text}</span>`);
+  } catch(e) {
+    termWrite(`<span class="term-error">API error: ${e.message}</span>`);
+  }
+}
+
+function insertTool(name) {
+  const input = document.getElementById('term-input');
+  input.value = name==='list_tables'?'list tables' : name==='run_sql'?'run_sql SELECT * FROM feeder_metrics ORDER BY atc_loss_pct DESC' : 'rank feeders by saidi';
+  input.focus();
+}
+
+function termKeydown(e) { if(e.key==='Enter') runAgentCustom(); }
+
+async function runAgentCustom() {
+  const input = document.getElementById('term-input');
+  const q = input.value.trim();
+  if(!q) return;
+  input.value='';
+  const apiKey = document.getElementById('apiKey').value.trim() || document.getElementById('apiKey2').value.trim();
+
+  termWrite(`<span class="term-prompt">agent@reliability:~$ </span><span class="term-cmd">${q}</span>`);
+  const ql = q.toLowerCase();
+
+  if(ql.includes('list')) {
+    const tables = tool_list_tables();
+    updateToolStats();
+    termWrite(termTable(tables,['table','rows']));
+    return;
+  }
+  if(ql.includes('run_sql') || ql.includes('select')) {
+    const r = tool_run_sql(q);
+    updateToolStats();
+    if(r.length) termWrite(termTable(r, Object.keys(r[0])));
+    else termWrite(`<span class="term-output">(no results)</span>`);
+    return;
+  }
+  if(ql.includes('rank')) {
+    const metric = ql.includes('saidi')?'saidi':ql.includes('sla')?'sla_breach':ql.includes('saifi')?'saifi':'atc_loss';
+    const r = tool_rank_entities(metric, 8);
+    updateToolStats();
+    termWrite(termTable(r,['rank','feeder_id','feeder_name','value','risk','rowid']));
+    return;
+  }
+  if(ql.includes('fault')) {
+    const r = tool_run_sql('fault');
+    updateToolStats();
+    termWrite(termTable(r,['fault_type','cmi_millions','incidents']));
+    return;
+  }
+
+  // fallback to Claude
+  if(apiKey) {
+    termWrite(`<span class="term-tool">→ Routing to Claude claude-sonnet-4-6 for free-form query…</span>`);
+    await callAgentClaude(apiKey, `Power reliability dataset query: "${q}"\n\nContext: 16 feeders, FDR07 worst AT&C 27.9%, FDR09 worst SAIDI 596, FDR14 transformer overload, underground cable CMI 4.6M. Use tool-call style citations like [feeder_metrics#R07].`);
+  } else {
+    termWrite(`<span class="term-output">Unknown command. Try: list tables | rank feeders by saidi | rank feeders by atc | run_sql ... | fault types<br>Add API key to enable AI-powered free-form queries.</span>`);
+  }
+}
+
+// ══════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════
+buildFeederTable();
+buildHeatmap();
+buildATCBars();
+buildFaultChart();
+
+// Blink cursor
+setInterval(()=>{
+  const c = document.getElementById('term-cursor');
+  if(c) c.style.opacity = c.style.opacity==='0'?'1':'0';
+}, 530);
+</script>
+</body>
+</html>
